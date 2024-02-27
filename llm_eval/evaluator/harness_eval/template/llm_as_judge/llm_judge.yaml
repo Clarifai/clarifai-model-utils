@@ -1,0 +1,43 @@
+task: llm_as_judge
+dataset_path: csv
+dataset_name:
+output_type: generate_until
+validation_split: validation
+fewshot_split: null
+test_split: null
+doc_to_text: "{{question}}"
+doc_to_target: "{{answer}}" #" {{answer.split('### ')[-1].rstrip()}}"
+metric_list:
+process_results: # empty, will initialize in st page
+metric_list:
+  - metric: relevance
+    aggregation: mean
+    higher_is_better: true
+  - metric: depth
+    aggregation: mean
+    higher_is_better: true
+  - metric: creativity
+    aggregation: mean
+    higher_is_better: true
+  - metric: correctness
+    aggregation: mean
+    higher_is_better: true
+  - metric: helpfulness
+    aggregation: mean
+    higher_is_better: true
+
+#generation_kwargs:
+#  until:
+#    - "\n\n"
+#    - "Question:"
+#  do_sample: false
+#  temperature: 0.0
+
+repeats: 1
+num_fewshot: 0
+#filter_list:
+#  - name: "get-answer"
+#    filter:
+#      - function: "regex"
+#        regex_pattern: r"\beat"
+#      - function: "take_first"

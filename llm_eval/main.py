@@ -1,0 +1,315 @@
+import datetime
+import os
+from collections import defaultdict
+from typing import Tuple, TypeVar, Union
+
+import pandas as pd
+from google.protobuf.json_format import MessageToDict
+
+from clarifai.client.dataset import Dataset
+from clarifai.client.model import Model
+from clarifai.client.workflow import Workflow
+from clarifai.utils.logging import get_logger
+
+from .constant import WORKFLOW
+from .evaluator import ClarifaiModelHarnessEval, EvaluateResult, convert_dict_to_eval_result
+from .utils import get_timestamp, make_dataset
+
+logger = get_logger(name=__file__)
+
+PREDICTOR_TYPES = TypeVar('PREDICTOR_TYPES', str, Model, Workflow)
+
+
+class ClarifaiEvaluator():
+
+  def __init__(self,
+               predictor: PREDICTOR_TYPES,
+               type: str = None,
+               inference_parameters: dict = {},
+               **predictor_kwargs):
+
+    if isinstance(predictor, str):
+      _pred_clss = Workflow if type == WORKFLOW else Model
+      predictor = _pred_clss(**predictor_kwargs)
+
+    self.predictor = predictor
+    self.evaluator = ClarifaiModelHarnessEval()
+    self.inference_parameters = inference_parameters
+    self._data = dict()
+    self.refresh()
+
+  def get_metric_name(self, template: str) -> list:
+    """
+    Get metric names of predefined templates
+
+    Args:
+        template (str): template name
+
+    Returns:
+        list: list of templates
+    """
+    return self.evaluator.get_metrics(template)
+
+  @property
+  def predefined_templates(self) -> list:
+    """ Get all predefined templates"""
+    return self.evaluator.templates
+
+  def get_template_desc(self, template: str) -> str:
+    """Get template description (readme)
+
+    Args:
+        template (str): template name
+
+    Returns:
+        str: desc
+    """
+    return self.evaluator.get_template_desc(template)
+
+  @property
+  def is_model(self):
+    return isinstance(self.predictor, Model)
+
+  @property
+  def data(self) -> dict:
+    if not self.is_model:
+      logger.warning(
+          "Workflow predictor does not have history of evaluation. Return empty or None")
+      return {}
+
+    return self._data
+
+  @property
+  def ts_to_eval_id(self):
+    return self._ts_to_id
+
+  @staticmethod
+  def _make_eval_id(template, dataset_app_id, dataset_id,
+                    with_ts: bool = True) -> Union[Tuple[str, str], str]:
+    """ Return: (id, timestamp) if with_ts otherwise id"""
+    if with_ts:
+      _ts = get_timestamp()
+      return f"{template},{dataset_app_id},{dataset_id},{_ts}", _ts
+    else:
+      return f"{template},{dataset_app_id},{dataset_id}"
+
+  @staticmethod
+  def parse_eval_id(_id) -> list:
+    """
+    Returns template, dataset_app_id, dataset_id, ts
+    """
+    data = _id.split(",")
+    return data if len(data) == 4 else []
+
+  def refresh(self):
+    """
+    Run `list_evaluations` method in order to update `data` attribute
+    """
+    if not self.is_model:
+      logger.warning("Not support `refresh` method for workflow predictor. Return empty value")
+      return {}
+
+    logger.info("Refresh eval metrics")
+    response = self.predictor.list_evaluations()
+    results = defaultdict(lambda: {})
+    _ts_to_id = defaultdict(lambda: {})
+    for each in response:
+      ext_metrics_dict = MessageToDict(each.extended_metrics.user_metrics)
+
+      def __parse_id(_id):
+        _parsed_data = self.parse_eval_id(_id)
+        if len(_parsed_data) == 4:
+          ts = int(_parsed_data[3])  # timestamp
+          # to template,dataset_app,dataset_id
+          _id = ",".join(_parsed_data[:-1])
+          return _id, ts
+        return None
+
+      eval_result = convert_dict_to_eval_result(ext_metrics_dict)
+      _parsed_id_ts = __parse_id(each.id)  # id of eval_metrics
+      if _parsed_id_ts:
+        _id, ts = _parsed_id_ts
+        eval_result.timestamp = ts
+        if not eval_result.id:
+          eval_result.id = each.id
+      elif eval_result.id:
+        _id, ts = __parse_id(eval_result.id)  # id of eval_result
+      else:
+        logger.warning(f"eval id {each.id} doen't have right format.")
+        continue
+      results[_id].update({ts: eval_result})
+      _ts_to_id[ts] = _id
+    self._data = results
+    self._ts_to_id = _ts_to_id
+
+  def is_in_evaluated_ids(self, _id):
+    """ Check if id in evalated ids """
+    return _id in self.get_eval_ids()
+
+  def get_eval_ids(self):
+    """ Get all eval ids of predictor """
+    return list(self.data.keys())
+
+  def get_timestamps_of_eval_ids(self, eval_id: str):
+    """
+    Get timestamps of specific eval id
+
+    Args:
+        eval_id (str): format "template,app,dataset"
+
+    Returns:
+        str: timestamp
+    """
+    return list(self.data[eval_id].keys())
+
+  def get_eval_result_of_eval_id(self, eval_id: str, ts: str) -> EvaluateResult:
+    """
+    Args:
+        eval_id (str): format "template,app,dataset"
+        ts (str): timestamp
+
+    Returns:
+        EvaluateResult
+    """
+    return self.data[eval_id][ts]
+
+  def get_latest_eval_result_of_eval_id(self,
+                                        eval_id=None,
+                                        template: str = None,
+                                        app_id: str = None,
+                                        dataset_id: str = None) -> EvaluateResult:
+    """
+    Get latest eval result by eval_id
+
+    Args:
+        eval_id (str): format "template,app_id,dataset"
+    Returns:
+        EvaluateResult
+    """
+
+    if not eval_id:
+      assert template and app_id and dataset_id, ValueError(
+          f"Expected setting `template`, `app_id`, `datset_id` when not using `eval_id`")
+      eval_id = self._make_eval_id(
+          template=template, dataset_app_id=app_id, dataset_id=dataset_id, with_ts=False)
+
+    ts = max(self.get_timestamps_of_eval_ids(eval_id))
+    return self.get_eval_result_of_eval_id(eval_id, ts)
+
+  def get_latest_eval(self) -> EvaluateResult:
+    """
+    Get latest eval result
+
+    Returns:
+        EvaluateResult
+    """
+    ts = max(self.ts_to_eval_id.keys())
+    _id = self.ts_to_eval_id[ts]
+    return self.data[_id][ts]
+
+  @staticmethod
+  def convert_to_timestamp(datetime_str):
+    # Convert the datetime string back to a datetime object
+    parsed_datetime = datetime.datetime.strptime(datetime_str, "%Y-%m-%d %H:%M:%S")
+    # Convert the datetime object back to a Unix timestamp
+    parsed_timestamp = int(parsed_datetime.timestamp())
+
+    return parsed_timestamp
+
+  def _get_template_name(self, template: Union[str, dict]) -> str:
+    if isinstance(template, dict):
+      name = template.get("task", None)
+      assert name, Exception("'task' is not set for the config")
+      return name
+    elif os.path.exists(template):
+      cfg = self.evaluator.load_config(template)
+      return self._get_template_name(cfg)
+    elif isinstance(template, str):
+      return template
+    else:
+      raise ValueError("Not supported template type")
+
+  def evaluate(self,
+               template: str,
+               dataset: Union[Dataset, pd.DataFrame],
+               upload: bool = False,
+               inference_parameters: dict = {},
+               weights: dict = {},
+               regex_code: str = "",
+               input_prompt: str = "",
+               judge_llm_url: str = "",
+               extra_harness_config: dict = {
+                   "num_fewshot": 0,
+               },
+               split_word: str = "### Response:",
+               **kwargs) -> EvaluateResult:
+    """Evaluating llm model
+
+    Args:
+        template (str): name of defined template or path to folder contains harness config/yaml
+        dataset (Union[Dataset, pd.DataFrame]): Dataset to evaluate
+        upload (bool, optional): Upload result to the platform. Defaults to False.
+        inference_parameters (dict, optional): inference parameters. Defaults to {}.
+        weights (dict, optional): Normalized (to 1) weights of metrics to compute average score. Defaults to {}.
+        regex_code (str, optional): Python regex code to filter model prediction. Defaults to "".
+        input_prompt (str, optional): Harness prompt template. Defaults to "".
+        judge_llm_url (str, optional): Url of judge model, required when using llm_as_judge template. Defaults to "".
+        extra_harness_config (dict, optional): Other custom harness config. Defaults to { "num_fewshot": 0, }.
+        split_word (str, optional): Split word for non-jsonify dataset. Defaults to "### Response:".
+
+    Returns:
+        EvaluateResult
+    """
+    if isinstance(dataset, Dataset):
+      dataset_id = dataset.id
+      app_id = dataset.app_id
+      df = make_dataset(
+          auth=self.predictor.auth_helper,
+          dataset_id=dataset.id,
+          app_id=dataset.app_id,
+          split_word=split_word,
+          max_input=None)
+    elif isinstance(dataset, pd.DataFrame):  # local data
+      df = dataset
+      dataset_id = kwargs.pop("dataset_id", "")
+      app_id = kwargs.pop("app_id", "")
+      assert dataset_id and app_id, ValueError(
+          f"`dataset_id` or `app_id` is empty when using local dataset. Please pass them to kwargs"
+      )
+    else:
+      raise Exception
+
+    logger.info("Start evaluating...")
+    output = self.evaluator.evaluate(
+        self.predictor,
+        data_frame=df,
+        weights=weights,
+        template=template,
+        regex_code=regex_code,
+        input_prompt=input_prompt,
+        judge_llm_url=judge_llm_url,
+        custom_config=extra_harness_config,
+        inference_parameters=inference_parameters or self.inference_parameters,
+        dataset_info=dict(
+            id=dataset_id,
+            app_id=app_id,
+        ),
+    )
+    logger.info("Evaluated!")
+
+    eval_id, timestamp = self._make_eval_id(
+        template=output.template, dataset_app_id=app_id, dataset_id=dataset_id, with_ts=True)
+    output.timestamp = timestamp
+    output.id = eval_id
+
+    if upload:
+      if not self.is_model:
+        logger.info("Not support `upload` for workflow predictor")
+      else:
+        logger.info("Uploading result...")
+        self.predictor.evaluate(
+            dataset_id='', extended_metrics=output.model_dump(mode='python'), eval_id=eval_id)
+
+    self.refresh()
+
+    return output
