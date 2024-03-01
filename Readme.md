@@ -12,9 +12,7 @@
 * **[Getting Started](#getting-started)**
 * **[Examples](#examples)**
 
-
 ## Installation
-
 
 Install from Source:
 
@@ -23,7 +21,7 @@ git clone https://github.com/Clarifai/clarifai-model-utils
 cd clarifai-model-utils
 python3 -m venv env
 source env/bin/activate
-pip3 install -r requirements.txt
+pip install -e .
 ```
 
 ## Getting started
