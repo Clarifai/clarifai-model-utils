@@ -21,22 +21,38 @@ PREDICTOR_TYPES = TypeVar('PREDICTOR_TYPES', str, Model, Workflow)
 
 
 class ClarifaiEvaluator():
+  """Clarifai LLM evaluattor
+
+  Args:
+      predictor (PREDICTOR_TYPES): Accept instance of Model/Workflow or url with additional 'predictor_kwargs'
+      type (str, optional): Type is 'workflow' or 'model', applicable if pass 'url' to predictor. Defaults to None.
+      inference_parameters (dict, optional): Model inference parameters. Defaults to {}.
+      workflow_output_node (int, optional): Output node of Workflow, applicable for Workflow predictor. Defaults to 1.
+
+  Example:
+  >>> from clarifai.client.model import Model
+  >>> model = Model(model_url)
+  >>> evaluator = ClarifaiEvaluator(predictor=model)
+
+  """
 
   def __init__(self,
                predictor: PREDICTOR_TYPES,
                type: str = None,
                inference_parameters: dict = {},
+               workflow_output_node: int = 1,
                **predictor_kwargs):
-
     if isinstance(predictor, str):
       _pred_clss = Workflow if type == WORKFLOW else Model
-      predictor = _pred_clss(**predictor_kwargs)
+      predictor = _pred_clss(url=predictor, **predictor_kwargs)
 
     self.predictor = predictor
     self.evaluator = ClarifaiModelHarnessEval()
     self.inference_parameters = inference_parameters
     self._data = dict()
     self.refresh()
+
+    self._workflow_output_node = workflow_output_node
 
   def get_metric_name(self, template: str) -> list:
     """
@@ -229,6 +245,18 @@ class ClarifaiEvaluator():
     else:
       raise ValueError("Not supported template type")
 
+  def upload_result(self, result: EvaluateResult):
+    if not self.is_model:
+      raise Exception("Not support `upload_result` for Workflow predictor")
+    else:
+      logger.info("Uploading result...")
+      eval_id = result.id
+      assert eval_id or len(
+          eval_id.split(",")
+      ) == 4, "Invalid eval id, expected to have format {template},{dataset_app_id},{dataset_id},{timestamp}, got " + eval_id
+      self.predictor.evaluate(
+          dataset_id='', extended_metrics=result.model_dump(mode='python'), eval_id=eval_id)
+
   def evaluate(self,
                template: str,
                dataset: Union[Dataset, pd.DataFrame],
@@ -263,6 +291,8 @@ class ClarifaiEvaluator():
     if isinstance(dataset, Dataset):
       dataset_id = dataset.id
       app_id = dataset.app_id
+      version_id = dataset.version.id
+      user_id = dataset.user_id
       df = make_dataset(
           auth=self.predictor.auth_helper,
           dataset_id=dataset.id,
@@ -273,7 +303,9 @@ class ClarifaiEvaluator():
       df = dataset
       dataset_id = kwargs.pop("dataset_id", "")
       app_id = kwargs.pop("app_id", "")
-      assert dataset_id and app_id, ValueError(
+      user_id = kwargs.pop("user_id", "")
+      version_id = kwargs.pop("version_id", "")
+      assert dataset_id or app_id, ValueError(
           f"`dataset_id` or `app_id` is empty when using local dataset. Please pass them to kwargs"
       )
     else:
@@ -290,11 +322,8 @@ class ClarifaiEvaluator():
         judge_llm_url=judge_llm_url,
         custom_config=extra_harness_config,
         inference_parameters=inference_parameters or self.inference_parameters,
-        dataset_info=dict(
-            id=dataset_id,
-            app_id=app_id,
-        ),
-    )
+        dataset_info=dict(id=dataset_id, app_id=app_id, user_id=user_id, version_id=version_id),
+        workflow_output_node=self._workflow_output_node)
     logger.info("Evaluated!")
 
     eval_id, timestamp = self._make_eval_id(
@@ -303,12 +332,7 @@ class ClarifaiEvaluator():
     output.id = eval_id
 
     if upload:
-      if not self.is_model:
-        logger.info("Not support `upload` for workflow predictor")
-      else:
-        logger.info("Uploading result...")
-        self.predictor.evaluate(
-            dataset_id='', extended_metrics=output.model_dump(mode='python'), eval_id=eval_id)
+      self.upload_result(output)
 
     self.refresh()
 

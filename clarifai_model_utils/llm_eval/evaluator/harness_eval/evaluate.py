@@ -104,20 +104,26 @@ class ClarifaiModelHarnessEval:
                         predictor: Union[str, Model, Workflow],
                         task_dict: dict,
                         inference_parameters: dict = {},
+                        workflow_output_node: int = 1,
                         predictor_kwargs: dict = {}):
     """Harness eval
 
     Args:
         predictor (Union[str, Model, Workflow])
+        task_dict (dict): harness lm eval task dict.
         inference_parameters (dict, optional): Clarifai mode inference_params that put into `predict_by..` function
-        predictor_kwargs (dict, optional): kwargs for initializing model class when passing an url.
         custom_config (dict, optional): harness eval config, see yaml file. Defaults to {}.
+        workflow_output_node (int, optional): Index of output node in workflow, applicable when using Workflow predictor.
+        predictor_kwargs (dict, optional): kwargs for initializing model class when passing an url.
 
     Returns:
         dict: with keys summary, configs, samples
     """
     lm = lm_eval.api.registry.get_model("clarifai")(
-        predictor=predictor, inference_parameters=inference_parameters, **predictor_kwargs)
+        predictor=predictor,
+        inference_parameters=inference_parameters,
+        workflow_output_node=workflow_output_node,
+        **predictor_kwargs)
 
     results = evaluator.evaluate(
         lm=lm,
@@ -183,6 +189,7 @@ class ClarifaiModelHarnessEval:
       predictor_kwargs: dict = {},
       eval_id: str = None,
       dataset_info: dict = None,
+      workflow_output_node: int = 1,
   ) -> EvaluateResult:
     """Evaluate
     Args:
@@ -195,7 +202,9 @@ class ClarifaiModelHarnessEval:
         judge_llm_url (str): Clarifai model url for `process_results`
         custom_config (dict, optional): a config type of dict of harness eval, see the yaml file or https://github.com/EleutherAI/lm-evaluation-harness/blob/ae74b808e43cd1ee6d88a157777f27eacd6b12dc/lm_eval/api/task.py#L52 for key value pair format. Defaults to {}.
         inference_params (dict, optional): LLM model inference params. Defaults to {}.
-
+        eval_id (str, optional): custom eval id
+        dataset_info (dict,): a dict has keys: {id, app_id, version_id, user_id}
+        workflow_output_node (int, optional): Index of output node in workflow, applicable when using Workflow predictor.
     Returns:
         EvaluateResult
 
@@ -243,6 +252,7 @@ class ClarifaiModelHarnessEval:
           predictor_kwargs=predictor_kwargs,
           task_dict=task_dict,
           inference_parameters=inference_parameters,
+          workflow_output_node=workflow_output_node,
       )
       results = make_result_dataframe(results=results, weights=weights)
       results.prompter = prompter

@@ -2,6 +2,7 @@ from collections import defaultdict
 from copy import deepcopy
 from typing import List, Optional, Union
 
+import pandas as pd
 from pydantic import BaseModel, Field, computed_field, validator
 
 from .judge_llm import Judge
@@ -103,6 +104,9 @@ class EvaluateResult(BaseModel, validate_assignment=True):
       return convert_to_datetime(self.timestamp)
     else:
       return None
+
+  def df_to_pandas(self):
+    return pd.DataFrame(self.df)
 
   def __setattr__(self, name, value):
 

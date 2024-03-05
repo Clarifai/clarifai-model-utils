@@ -11,7 +11,7 @@ from clarifai.client.workflow import Workflow
 from ...constant import MODEL
 
 
-def clarifailm_completion(client, prompt, **kwargs):
+def clarifailm_completion(_self, prompt, **kwargs):
   """Query Clarifai API for completion.
 
     Retry with back-off until they respond
@@ -22,8 +22,14 @@ def clarifailm_completion(client, prompt, **kwargs):
     try:
       prompt = bytes(prompt, 'utf-8')
       # get final output of workflow/model
-      response = client.predict_by_bytes(
-          input_bytes=prompt, input_type="text", **kwargs).outputs[-1].data.text.raw
+      if _self.is_model:
+        response = _self.client.predict_by_bytes(
+            input_bytes=prompt, input_type="text",
+            inference_params=_self.inference_parameters).outputs[-1].data.text.raw
+      else:
+        response = _self.client.predict_by_bytes(
+            input_bytes=prompt,
+            input_type="text").results[0].outputs[_self.workflow_output_node].data.text.raw
       return response
     except RuntimeError:
       import traceback
@@ -41,6 +47,7 @@ class ClarifaiLM(LM):
                predictor: Union[Model, Workflow, str],
                type: str = None,
                inference_parameters: dict = {},
+               workflow_output_node: int = 1,
                **kwargs):
     """
     """
@@ -55,6 +62,16 @@ class ClarifaiLM(LM):
 
     self.inference_parameters = inference_parameters
     self.kwargs = kwargs
+
+    self._workflow_output_node = workflow_output_node
+
+  @property
+  def workflow_output_node(self):
+    return self._workflow_output_node
+
+  @property
+  def is_model(self):
+    return isinstance(self.client, Model)
 
   @property
   def eot_token_id(self):
@@ -98,8 +115,8 @@ class ClarifaiLM(LM):
       inp = request[0]
       request[1]
       #until = request_args["until"]
-      response = clarifailm_completion(
-          client=self.client, prompt=inp, inference_params=self.inference_parameters)
+      response = clarifailm_completion(_self=self, prompt=inp)
+
       res.append(response)
     return res
 
