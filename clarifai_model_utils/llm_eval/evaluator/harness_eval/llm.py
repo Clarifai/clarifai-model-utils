@@ -11,7 +11,7 @@ from clarifai.client.workflow import Workflow
 from ...constant import MODEL
 
 
-def clarifailm_completion(_self, prompt, **kwargs):
+def clarifailm_completion(_self, prompt, inference_params=None, **kwargs):
   """Query Clarifai API for completion.
 
     Retry with back-off until they respond
@@ -24,7 +24,7 @@ def clarifailm_completion(_self, prompt, **kwargs):
       # get final output of workflow/model
       if _self.is_model:
         response = _self.client.predict_by_bytes(
-            input_bytes=prompt, input_type="text",
+              input_bytes=prompt, input_type="text",
             inference_params=_self.inference_parameters).outputs[-1].data.text.raw
       else:
         response = _self.client.predict_by_bytes(

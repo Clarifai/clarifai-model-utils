@@ -12,6 +12,8 @@ from clarifai_grpc.grpc.api.status import status_code_pb2
 from google.protobuf import struct_pb2
 
 from clarifai.utils.logging import get_logger
+from clarifai.client.app import App
+from clarifai.client.input import Inputs
 
 logger = get_logger(name='clarifai_llm_eval-' + __file__)
 
@@ -35,18 +37,11 @@ def get_text_dataset_inputs(auth, user_id: str, app_id: str, dataset_id: str, ma
   user_app_id = resources_pb2.UserAppIDSet(user_id=user_id, app_id=app_id)
 
   # get number of samples of dataset
-  get_dataset_resp = stub.GetDataset(
-      service_pb2.GetDatasetRequest(
-          user_app_id=user_app_id,
-          dataset_id=dataset_id,
-      ),
-      metadata=auth.metadata)
-  if get_dataset_resp.status.code != status_code_pb2.SUCCESS:
-    logger.error(get_dataset_resp.status)
-    return False, get_dataset_resp.status.description
+  app = App(app_id=app_id, user_id=user_id)
+  dataset = app.dataset(dataset_id=dataset_id)
 
   max_per_page = 128
-  total_samples = get_dataset_resp.dataset.version.metrics['/'].inputs_count.value
+  total_samples = dataset.version.metrics['/'].inputs_count.value
   if not max_input:
     per_page = max_per_page
     chunks = total_samples // per_page
@@ -57,21 +52,12 @@ def get_text_dataset_inputs(auth, user_id: str, app_id: str, dataset_id: str, ma
     else:
       per_page = max_per_page
 
+  input_obj = Inputs(user_id=user_id, app_id=app_id, pat=auth._pat)
+  
   urls = []
   for page in range(chunks + 1):
-    list_input_response = stub.ListDatasetInputs(
-        service_pb2.ListDatasetInputsRequest(
-            user_app_id=user_app_id,
-            dataset_id=dataset_id,
-            page=page,
-            per_page=per_page,
-        ),
-        metadata=auth.metadata)
-    if list_input_response.status.code != status_code_pb2.SUCCESS:
-      logger.error(list_input_response.status)
-      return False, list_input_response.status.description
-
-    _urls = [item.input.data.text.url for item in list_input_response.dataset_inputs]
+    all_inputs = list(input_obj.list_inputs(input_type='text', dataset_id=dataset_id, per_page=per_page, page_no=page))
+    _urls = [item.input.data.text.url for item in all_inputs.dataset_inputs]
     if len(_urls) < 1:
       break
     urls += _urls
