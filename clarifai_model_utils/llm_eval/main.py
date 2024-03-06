@@ -27,7 +27,8 @@ class ClarifaiEvaluator():
       predictor (PREDICTOR_TYPES): Accept instance of Model/Workflow or url with additional 'predictor_kwargs'
       type (str, optional): Type is 'workflow' or 'model', applicable if pass 'url' to predictor. Defaults to None.
       inference_parameters (dict, optional): Model inference parameters. Defaults to {}.
-      workflow_output_node (int, optional): Output node of Workflow, applicable for Workflow predictor. Defaults to 1.
+      workflow_output_node (int, optional): Output node of Workflow, applicable for Workflow predictor. Defaults to 1. Ignore when evaluate RAG.
+      is_rag_workflow (bool, optional): Evaluate a RAG workflow, applicable when using Workflow predictor.
 
   Example:
   >>> from clarifai.client.model import Model
@@ -41,6 +42,7 @@ class ClarifaiEvaluator():
                type: str = None,
                inference_parameters: dict = {},
                workflow_output_node: int = 1,
+               is_rag_workflow: bool = None,
                **predictor_kwargs):
     if isinstance(predictor, str):
       _pred_clss = Workflow if type == WORKFLOW else Model
@@ -51,8 +53,12 @@ class ClarifaiEvaluator():
     self.inference_parameters = inference_parameters
     self._data = dict()
     self.refresh()
-
+    self._is_rag_workflow = is_rag_workflow
     self._workflow_output_node = workflow_output_node
+
+  @classmethod
+  def with_rag_workflow(cls, predictor: Union[str, Workflow], **kwargs):
+    return cls(predictor=predictor, type=WORKFLOW, is_rag_workflow=True, **kwargs)
 
   def get_metric_name(self, template: str) -> list:
     """
@@ -323,7 +329,9 @@ class ClarifaiEvaluator():
         custom_config=extra_harness_config,
         inference_parameters=inference_parameters or self.inference_parameters,
         dataset_info=dict(id=dataset_id, app_id=app_id, user_id=user_id, version_id=version_id),
-        workflow_output_node=self._workflow_output_node)
+        workflow_output_node=self._workflow_output_node,
+        is_rag_workflow=self._is_rag_workflow,
+    )
     logger.info("Evaluated!")
 
     eval_id, timestamp = self._make_eval_id(
@@ -331,7 +339,7 @@ class ClarifaiEvaluator():
     output.timestamp = timestamp
     output.id = eval_id
 
-    if upload:
+    if upload and isinstance(self.predictor, Model):
       self.upload_result(output)
 
     self.refresh()

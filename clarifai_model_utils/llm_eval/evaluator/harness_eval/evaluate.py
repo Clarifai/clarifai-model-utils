@@ -105,6 +105,7 @@ class ClarifaiModelHarnessEval:
                         task_dict: dict,
                         inference_parameters: dict = {},
                         workflow_output_node: int = 1,
+                        is_rag_workflow: bool = None,
                         predictor_kwargs: dict = {}):
     """Harness eval
 
@@ -114,6 +115,7 @@ class ClarifaiModelHarnessEval:
         inference_parameters (dict, optional): Clarifai mode inference_params that put into `predict_by..` function
         custom_config (dict, optional): harness eval config, see yaml file. Defaults to {}.
         workflow_output_node (int, optional): Index of output node in workflow, applicable when using Workflow predictor.
+        is_rag_workflow (bool, optional): Evaluate a RAG workflow, applicable when using Workflow predictor.
         predictor_kwargs (dict, optional): kwargs for initializing model class when passing an url.
 
     Returns:
@@ -123,6 +125,7 @@ class ClarifaiModelHarnessEval:
         predictor=predictor,
         inference_parameters=inference_parameters,
         workflow_output_node=workflow_output_node,
+        is_rag_workflow=is_rag_workflow,
         **predictor_kwargs)
 
     results = evaluator.evaluate(
@@ -190,6 +193,7 @@ class ClarifaiModelHarnessEval:
       eval_id: str = None,
       dataset_info: dict = None,
       workflow_output_node: int = 1,
+      is_rag_workflow: bool = None,
   ) -> EvaluateResult:
     """Evaluate
     Args:
@@ -204,7 +208,8 @@ class ClarifaiModelHarnessEval:
         inference_params (dict, optional): LLM model inference params. Defaults to {}.
         eval_id (str, optional): custom eval id
         dataset_info (dict,): a dict has keys: {id, app_id, version_id, user_id}
-        workflow_output_node (int, optional): Index of output node in workflow, applicable when using Workflow predictor.
+        workflow_output_node (int, optional): Index of output node in workflow, applicable when using Workflow predictor. Ignore when evaluate RAG
+        is_rag_workflow (bool, optional): Evaluate a RAG workflow, applicable when using Workflow predictor.
     Returns:
         EvaluateResult
 
@@ -217,7 +222,7 @@ class ClarifaiModelHarnessEval:
 
       config = self.prepare_config(_template, _file.name)
       config.update(custom_config)
-      template_name = config.get("task", None)
+      template_name = config.get("task", None) or template
       # checking weights config
       _loaded_metrics = self.load_metrics_list_from_config(config)
       assert all([each in _loaded_metrics for each in weights]), Exception(
@@ -229,14 +234,18 @@ class ClarifaiModelHarnessEval:
         filters = construct_filters(construct_regex_filter(eval(regex_code)))
         config.update(filters)
 
-      if "llm_as_judge" in [template, template_name]:
-        assert judge_llm_url, "`judge_llm_url` must be provided when using template `llm_as_judge`"
-
       judge_model = None
-      if judge_llm_url:
+      if template_name in ['llm_as_judge', 'rag']:
+        assert judge_llm_url, ValueError(
+            f"Please provide judge_llm_url for template llm_as_judge or rag")
         judge_model = LmJudgeInfo(url=judge_llm_url)
         logger.debug(judge_model)
-        config.update(dict(process_results=judge_model.judge_process_result_func))
+        if 'rag' in template_name or is_rag_workflow:
+          assert isinstance(predictor, Workflow), "Require Workflow predictor to evaluate RAG"
+          config.update(dict(process_results=judge_model.judge.process_rag_result))
+          is_rag_workflow = True
+        elif template_name == 'llm_as_judge':
+          config.update(dict(process_results=judge_model.judge_process_result_func))
 
       if dataset_info and isinstance(dataset_info, dict):
         dataset_info = DatasetInfo(**dataset_info)
@@ -253,6 +262,7 @@ class ClarifaiModelHarnessEval:
           task_dict=task_dict,
           inference_parameters=inference_parameters,
           workflow_output_node=workflow_output_node,
+          is_rag_workflow=is_rag_workflow,
       )
       results = make_result_dataframe(results=results, weights=weights)
       results.prompter = prompter
