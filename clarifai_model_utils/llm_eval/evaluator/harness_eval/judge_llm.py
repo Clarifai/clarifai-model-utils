@@ -9,10 +9,11 @@ from clarifai.urls.helper import ClarifaiUrlHelper
 class Judge:
   """ Implement LLM as Judge class"""
 
-  def __init__(self, url, pat=None, eval_rag_workflow: bool = None):
+  def __init__(self, url, pat=None, token=None):
     user_id, app_id, _, model_id, _ = ClarifaiUrlHelper.split_clarifai_url(url)
-    CLARIFAI_PAT = os.environ.get("CLARIFAI_PAT", pat)
-    self.judge = Clarifai(pat=CLARIFAI_PAT, user_id=user_id, app_id=app_id, model_id=model_id)
+    pat = os.environ.get("CLARIFAI_PAT", pat)
+    token = os.environ.get("CLARIFAI_SESSION_TOKEN", token)
+    self.judge = Clarifai(pat=pat, user_id=user_id, app_id=app_id, model_id=model_id)
     llm_metric_list = ["relevance", "depth", "creativity", "correctness", "helpfulness"]
     llm_metric_list.sort()
 

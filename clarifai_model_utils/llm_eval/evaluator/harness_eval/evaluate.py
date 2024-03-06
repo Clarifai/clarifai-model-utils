@@ -178,7 +178,7 @@ class ClarifaiModelHarnessEval:
 
   def evaluate(
       self,
-      predictor: Union[Model, Workflow, str],
+      predictor: Union[Model, Workflow],
       data_frame: pd.DataFrame,
       template: str,
       weights: dict,
@@ -197,7 +197,7 @@ class ClarifaiModelHarnessEval:
   ) -> EvaluateResult:
     """Evaluate
     Args:
-        predictor (Union[Model, Workflow, str]): Model/Workflow or Url
+        predictor (Union[Model, Workflow]): Model/Workflow or Url
         data_frame (pd.DataFrame): a dataframe has column names [question, answer]
         template (str): template name
         weights (dict): weights of sub metrics
@@ -238,7 +238,8 @@ class ClarifaiModelHarnessEval:
       if template_name in ['llm_as_judge', 'rag']:
         assert judge_llm_url, ValueError(
             f"Please provide judge_llm_url for template llm_as_judge or rag")
-        judge_model = LmJudgeInfo(url=judge_llm_url)
+        judge_model = LmJudgeInfo(
+            url=judge_llm_url, pat=predictor.auth_helper._pat, token=predictor.auth_helper._token)
         logger.debug(judge_model)
         if 'rag' in template_name or is_rag_workflow:
           assert isinstance(predictor, Workflow), "Require Workflow predictor to evaluate RAG"

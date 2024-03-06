@@ -13,13 +13,14 @@ class LmJudgeInfo(BaseModel):
   url: str
   model_id: Optional[str] = ""
   pat: Optional[str] = Field(default="", exclude=True)
+  token: Optional[str] = Field(default="", exclude=True)
   judge: Judge = Field(default=None, exclude=True)
 
   class Config:
     arbitrary_types_allowed = True
 
   def model_post_init(self, __context) -> None:
-    self.judge = Judge(self.url, self.pat)
+    self.judge = Judge(self.url, self.pat, self.token)
     if self.model_id == "":
       self.model_id = self.judge.judge.model_id
 

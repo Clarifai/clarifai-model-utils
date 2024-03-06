@@ -300,7 +300,7 @@ class ClarifaiEvaluator():
       version_id = dataset.version.id
       user_id = dataset.user_id
       df = make_dataset(
-          auth=self.predictor.auth_helper,
+          auth=dataset.auth_helper,
           dataset_id=dataset.id,
           app_id=dataset.app_id,
           split_word=split_word,
