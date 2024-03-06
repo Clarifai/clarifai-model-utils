@@ -27,10 +27,17 @@ def clarifailm_completion(_self, prompt, inference_params=None, **kwargs):
               input_bytes=prompt, input_type="text",
             inference_params=_self.inference_parameters).outputs[-1].data.text.raw
       else:
-        response = _self.client.predict_by_bytes(
-            input_bytes=prompt,
-            input_type="text").results[0].outputs[_self.workflow_output_node].data.text.raw
+        if _self.is_rag_workflow:
+          output = _self.client.predict_by_bytes(input_bytes=prompt, input_type="text")
+          query = output.results[0].outputs[0].data.text.raw
+          _response = output.results[0].outputs[1].data.text.raw
+          response = [query, _response]
+        else:
+          response = _self.client.predict_by_bytes(
+              input_bytes=prompt,
+              input_type="text").results[0].outputs[_self.workflow_output_node].data.text.raw
       return response
+
     except RuntimeError:
       import traceback
 
@@ -48,6 +55,7 @@ class ClarifaiLM(LM):
                type: str = None,
                inference_parameters: dict = {},
                workflow_output_node: int = 1,
+               is_rag_workflow: bool = None,
                **kwargs):
     """
     """
@@ -62,8 +70,16 @@ class ClarifaiLM(LM):
 
     self.inference_parameters = inference_parameters
     self.kwargs = kwargs
-
+    self._is_rag_workflow = is_rag_workflow
     self._workflow_output_node = workflow_output_node
+
+    if self._is_rag_workflow:
+      assert isinstance(self.client,
+                        Workflow), f"is_rag_workflow is True but predictor is not Workflow"
+
+  @property
+  def is_rag_workflow(self):
+    return self._is_rag_workflow
 
   @property
   def workflow_output_node(self):
