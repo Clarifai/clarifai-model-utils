@@ -1,5 +1,5 @@
 clarifai==10.1.1
-future==0.18.2
+future==0.18.3
 lm-eval==0.4.0
 numpy==1.23.1
 pandas==1.4.3
