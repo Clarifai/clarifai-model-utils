@@ -64,3 +64,20 @@ class Judge:
         results[m] = 0
 
     return results
+  
+  def process_rag_result_df(self, df):
+    # Take value of `question
+    query = df["question"]
+    prediction = df["prediction"]
+    results = dict()
+    for metric, executor in self.rag_metrics.items():
+      if metric != "correctness":
+        results.update({
+            metric: executor.evaluate_strings(input=query, prediction=prediction)['score']
+        })
+
+    for m in results:
+      if results[m] is None:
+        results[m] = 0
+
+    return results

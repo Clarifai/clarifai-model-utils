@@ -14,6 +14,7 @@ from google.protobuf import struct_pb2
 from clarifai.utils.logging import get_logger
 from clarifai.client.app import App
 from clarifai.client.input import Inputs
+from clarifai.client.model import Model
 
 logger = get_logger(name='clarifai_llm_eval-' + __file__)
 
@@ -81,29 +82,8 @@ def get_text_dataset_inputs(auth, user_id: str, app_id: str, dataset_id: str, ma
 
 
 def post_ext_metrics_eval(auth, model_id, version_id, eval_id, ext_metrics):
-  metrics = struct_pb2.Struct()
-  metrics.update(ext_metrics)
-  metrics = resources_pb2.ExtendedMetrics(user_metrics=metrics)
-
-  stub = auth.get_stub()
-  user_app_id = resources_pb2.UserAppIDSet(user_id=auth.user_id, app_id=auth.app_id)
-  post_eval = stub.PostEvaluations(
-      service_pb2.PostEvaluationsRequest(
-          user_app_id=user_app_id,
-          eval_metrics=[
-              resources_pb2.EvalMetrics(
-                  id=eval_id,
-                  model=resources_pb2.Model(
-                      id=model_id,
-                      app_id=auth.app_id,
-                      user_id=auth.user_id,
-                      model_version=resources_pb2.ModelVersion(id=version_id),
-                  ),
-                  extended_metrics=metrics if ext_metrics else None)
-          ],
-      ),
-      metadata=auth.metadata,
-  )
+  model = Model(app_id=auth.app_id, user_id=auth.user_id, model_id=model_id, model_version=dict({"id": version_id}))
+  post_eval = Model.evaluate(dataset_id="", eval_id=eval_id, extended_metrics=ext_metrics)
   return post_eval
 
 
