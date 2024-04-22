@@ -5,6 +5,7 @@ from typing import Tuple, TypeVar, Union
 
 import pandas as pd
 from google.protobuf.json_format import MessageToDict
+from datasets import Dataset as HFDataset
 
 from clarifai.client.dataset import Dataset
 from clarifai.client.model import Model
@@ -265,7 +266,7 @@ class ClarifaiEvaluator():
 
   def evaluate(self,
                template: str,
-               dataset: Union[Dataset, pd.DataFrame],
+               dataset: Union[Dataset, pd.DataFrame, HFDataset],
                upload: bool = False,
                inference_parameters: dict = {},
                weights: dict = {},
@@ -281,7 +282,7 @@ class ClarifaiEvaluator():
 
     Args:
         template (str): name of defined template or path to folder contains harness config/yaml
-        dataset (Union[Dataset, pd.DataFrame]): Dataset to evaluate
+        dataset (Union[Dataset, pd.DataFrame, HFDataset]): Dataset to evaluate
         upload (bool, optional): Upload result to the platform. Defaults to False.
         inference_parameters (dict, optional): inference parameters. Defaults to {}.
         weights (dict, optional): Normalized (to 1) weights of metrics to compute average score. Defaults to {}.
@@ -314,6 +315,8 @@ class ClarifaiEvaluator():
       assert dataset_id or app_id, ValueError(
           f"`dataset_id` or `app_id` is empty when using local dataset. Please pass them to kwargs"
       )
+    elif isinstance(dataset, HFDataset):
+      df = dataset.to_pandas(batched=True)
     else:
       raise Exception
 
