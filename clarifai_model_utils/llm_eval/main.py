@@ -6,13 +6,14 @@ from typing import Tuple, TypeVar, Union
 import pandas as pd
 from google.protobuf.json_format import MessageToDict
 from datasets import Dataset as HFDataset
+import ragas
 
 from clarifai.client.dataset import Dataset
 from clarifai.client.model import Model
 from clarifai.client.workflow import Workflow
 from clarifai.utils.logging import get_logger
 
-from .constant import WORKFLOW
+from .constant import WORKFLOW, JUDGE_LLMS
 from .evaluator import ClarifaiModelHarnessEval, EvaluateResult, convert_dict_to_eval_result
 from .utils import get_timestamp, make_dataset
 
@@ -277,6 +278,7 @@ class ClarifaiEvaluator():
                    "num_fewshot": 0,
                },
                split_word: str = "### Response:",
+               generate_qa: bool = False,
                **kwargs) -> EvaluateResult:
     """Evaluating llm model
 
@@ -291,6 +293,7 @@ class ClarifaiEvaluator():
         judge_llm_url (str, optional): Url of judge model, required when using llm_as_judge template. Defaults to "".
         extra_harness_config (dict, optional): Other custom harness config. Defaults to { "num_fewshot": 0, }.
         split_word (str, optional): Split word for non-jsonify dataset. Defaults to "### Response:".
+        generate_qa (bool): Whether to generate questions and answers from the provided dataset. The dataset is expected to be contexts.
 
     Returns:
         EvaluateResult
@@ -318,7 +321,39 @@ class ClarifaiEvaluator():
     elif isinstance(dataset, HFDataset):
       df = dataset.to_pandas(batched=True)
     else:
-      raise Exception
+      raise Exception("Only Dataset, pd.DataFrame, and HFDataset types are handled.")
+    
+    if generate_qa:
+      from ragas.testset.generator import TestsetGenerator
+      from ragas.testset.evolutions import simple, reasoning, multi_context
+      from langchain_community.llms import Clarifai
+      from langchain_community.embeddings import ClarifaiEmbeddings
+      from langchain_community.document_loaders import DataFrameLoader
+
+      ## Initialize models.
+      MODEL_URL = "https://clarifai.com/clarifai/main/models/BAAI-bge-base-en-v15"
+      llm = Clarifai(model_url=JUDGE_LLMS.LLAMA2_CHAT_70B)
+      embeddings = ClarifaiEmbeddings(model_url=MODEL_URL)
+      generator = TestsetGenerator.from_langchain(
+        llm,
+        llm,
+        embeddings
+      )
+
+      # Convert dataframe to langchain docs.
+      loader = DataFrameLoader(df)
+      documents = loader.load()
+
+      generated_test_set = generator.generate_with_langchain_docs(
+        documents, 
+        test_size=10, 
+        distributions={
+            simple: 0.5, 
+            reasoning: 0.25, 
+            multi_context: 0.25})
+
+      df = generated_test_set.to_pandas()
+
 
     logger.info("Start evaluating...")
     output = self.evaluator.evaluate(

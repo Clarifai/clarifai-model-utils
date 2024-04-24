@@ -88,7 +88,7 @@ from clarifai.client.model import Model
 from clarifai.client.dataset import Dataset
 
 model = Model(model_url)
-ds = Dataset(ds_url)  ## This dataset only has text chunks from source. There are no questions or answers yet.
+ds = Dataset(ds_url)  ## This dataset only has text chunks from source. There are no questions or answers yet. 
 
 evaluator = ClarifaiEvaluator(predictor=model)
 
