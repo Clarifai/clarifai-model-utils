@@ -141,3 +141,5 @@ src/
 pages/test.py
 /hf_cache/*/
 !/hf_cache/modules
+
+*.csv

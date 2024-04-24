@@ -281,7 +281,7 @@ class ClarifaiEvaluator():
                    "num_fewshot": 0,
                },
                split_word: str = "### Response:",
-               generate_qa: bool = False,
+               generate_qa: int = None,
                **kwargs) -> EvaluateResult:
     """Evaluating llm model
 
@@ -296,7 +296,7 @@ class ClarifaiEvaluator():
         judge_llm_url (str, optional): Url of judge model, required when using llm_as_judge template. Defaults to "".
         extra_harness_config (dict, optional): Other custom harness config. Defaults to { "num_fewshot": 0, }.
         split_word (str, optional): Split word for non-jsonify dataset. Defaults to "### Response:".
-        generate_qa (bool): Whether to generate questions and answers from the provided dataset. The dataset is expected to be contexts.
+        generate_qa (int, optional): How many questions and answers to generate from the provided dataset. The dataset is expected to be contexts.
 
     Returns:
         EvaluateResult
@@ -334,7 +334,7 @@ class ClarifaiEvaluator():
       from langchain_community.document_loaders import DataFrameLoader
 
       ## Initialize models.
-      llm = Clarifai(model_url=JUDGE_LLMS.LLAMA2_CHAT_70B)
+      llm = Clarifai(model_url=JUDGE_LLMS.GPT4)
       embeddings = ClarifaiEmbeddings(model_url=BGE_BASE_EMBED_MDOEL)
       generator = TestsetGenerator.from_langchain(
         llm,
@@ -348,15 +348,19 @@ class ClarifaiEvaluator():
 
       generated_test_set = generator.generate_with_langchain_docs(
         documents, 
-        test_size=10, 
+        test_size=generate_qa, 
         distributions={
             simple: 0.5, 
             reasoning: 0.25, 
             multi_context: 0.25})
 
       df = generated_test_set.to_pandas()
+      df.to_csv("generated_qa_test_set.csv", index=False)
 
+      # Get answers from predictor
+      pass
 
+    import pdb; pdb.set_trace()
     logger.info("Start evaluating...")
     output = self.evaluator.evaluate(
         self.predictor,
