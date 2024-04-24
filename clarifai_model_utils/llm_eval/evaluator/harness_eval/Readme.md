@@ -19,7 +19,7 @@ This file contains the implementation of the `Clarifai SDK model/workflow` deriv
 
 ### 3. [judge_llm.py](judge_llm.py)
 
-The `judge_llm.py` module contains the `JudgeLLM` class whose `process` method is inserted into the `process_results` field of templates `llm_as_judge` and `rag`. This allows any judge model to be chosen by providing its URL. You can refer to its usage in [evaluate.py](https://github.com/Clarifai/clarifai-model-utils/blob/09eb2ab5f5b3a4db898dbb90c4f8de82ad746f4c/clarifai_model_utils/llm_eval/evaluator/harness_eval/evaluate.py#L241).
+The `judge_llm.py` module contains the `JudgeLLM` class whose `process` method is inserted into the `process_results` field of templates `llm_as_judge` and `rag`. This allows any judge model to be chosen by providing its URL. You can refer to its usage in [evaluate.py](https://github.com/Clarifai/clarifai-model-utils/blob/main/clarifai_model_utils/llm_eval/evaluator/harness_eval/evaluate.py#L241).
 
 The `process` method takes a row of input dataset and a model output as input arguments, allowing developers to compute the score based on this information.
 
