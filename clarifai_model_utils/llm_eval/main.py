@@ -45,6 +45,7 @@ class ClarifaiEvaluator():
                inference_parameters: dict = {},
                workflow_output_node: int = 1,
                is_rag_workflow: bool = None,
+               refresh_enabled: bool = True,
                **predictor_kwargs):
     if isinstance(predictor, str):
       _pred_clss = Workflow if type == WORKFLOW else Model
@@ -54,7 +55,9 @@ class ClarifaiEvaluator():
     self.evaluator = ClarifaiModelHarnessEval()
     self.inference_parameters = inference_parameters
     self._data = dict()
-    self.refresh()
+    self.refresh_enabled = refresh_enabled
+    if refresh_enabled:
+      self.refresh()
     self._is_rag_workflow = is_rag_workflow
     self._workflow_output_node = workflow_output_node
 
@@ -308,7 +311,7 @@ class ClarifaiEvaluator():
           dataset_id=dataset.id,
           app_id=dataset.app_id,
           split_word=split_word,
-          max_input=None)
+          generate_qa=generate_qa)
     elif isinstance(dataset, pd.DataFrame):  # local data
       df = dataset
       dataset_id = kwargs.pop("dataset_id", "")
@@ -340,6 +343,7 @@ class ClarifaiEvaluator():
       )
 
       # Convert dataframe to langchain docs.
+      import pdb; pdb.set_trace()
       loader = DataFrameLoader(df)
       documents = loader.load()
 
@@ -379,6 +383,7 @@ class ClarifaiEvaluator():
     if upload and isinstance(self.predictor, Model):
       self.upload_result(output)
 
-    self.refresh()
+    if self.refresh_enabled:
+      self.refresh()
 
     return output

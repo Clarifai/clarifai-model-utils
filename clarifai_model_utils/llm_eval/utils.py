@@ -121,7 +121,7 @@ def post_ext_metrics_eval(auth, model_id, version_id, eval_id, ext_metrics):
   return post_eval
 
 
-def make_dataset(auth, app_id, dataset_id, split_word: str = "", max_input=None):
+def make_dataset(auth, app_id, dataset_id, split_word: str = "", max_input=None, generate_qa=False):
   """Pull dataset from Clarifai platform
 
   Args:
@@ -140,7 +140,11 @@ def make_dataset(auth, app_id, dataset_id, split_word: str = "", max_input=None)
       max_input=max_input,
   )
   _df = None
-  if flag:
+  if generate_qa:
+    ## Assume the stored text is plain text.
+    _df = pd.DataFrame({'text': texts})
+  elif flag:
+    ## Assume the stored text is in json string format.
     try:
       json_texts = [json.loads(each) for each in texts]
       _df = pd.DataFrame.from_dict(json_texts, orient="columns")
