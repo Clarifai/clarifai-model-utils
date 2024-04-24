@@ -343,7 +343,6 @@ class ClarifaiEvaluator():
       )
 
       # Convert dataframe to langchain docs.
-      import pdb; pdb.set_trace()
       loader = DataFrameLoader(df)
       documents = loader.load()
 
