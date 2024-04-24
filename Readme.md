@@ -26,6 +26,8 @@ pip install -e .
 
 ## Getting started
 
+Set your CLARIFAI_PAT as an environment variable.
+
 Quick demo of `LLM Evaluation`
 
 ```python

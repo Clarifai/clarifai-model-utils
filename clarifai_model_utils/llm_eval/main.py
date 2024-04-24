@@ -13,7 +13,7 @@ from clarifai.client.model import Model
 from clarifai.client.workflow import Workflow
 from clarifai.utils.logging import get_logger
 
-from .constant import WORKFLOW, JUDGE_LLMS
+from .constant import BGE_BASE_EMBED_MDOEL, WORKFLOW, JUDGE_LLMS
 from .evaluator import ClarifaiModelHarnessEval, EvaluateResult, convert_dict_to_eval_result
 from .utils import get_timestamp, make_dataset
 
@@ -331,9 +331,8 @@ class ClarifaiEvaluator():
       from langchain_community.document_loaders import DataFrameLoader
 
       ## Initialize models.
-      MODEL_URL = "https://clarifai.com/clarifai/main/models/BAAI-bge-base-en-v15"
       llm = Clarifai(model_url=JUDGE_LLMS.LLAMA2_CHAT_70B)
-      embeddings = ClarifaiEmbeddings(model_url=MODEL_URL)
+      embeddings = ClarifaiEmbeddings(model_url=BGE_BASE_EMBED_MDOEL)
       generator = TestsetGenerator.from_langchain(
         llm,
         llm,
