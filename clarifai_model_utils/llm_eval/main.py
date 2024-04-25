@@ -15,7 +15,7 @@ from clarifai.utils.logging import get_logger
 
 from .constant import BGE_BASE_EMBED_MDOEL, WORKFLOW, JUDGE_LLMS
 from .evaluator import ClarifaiModelHarnessEval, EvaluateResult, convert_dict_to_eval_result
-from .utils import get_timestamp, make_dataset
+from .utils import get_model_answers, get_timestamp, make_dataset
 
 logger = get_logger(name=__file__)
 
@@ -358,9 +358,15 @@ class ClarifaiEvaluator():
       df.to_csv("generated_qa_test_set.csv", index=False)
 
       # Get answers from predictor
-      pass
+      if self.is_model:
+        model_id = self.predictor.id
+        model_user_id = self.predictor.user_id
+        model_app_id = self.predictor.app_id
+        auth_helper = self.predictor.auth_helper
 
-    import pdb; pdb.set_trace()
+      df = get_model_answers(auth_helper, model_user_id, model_app_id, model_id, df)
+      df.to_csv("generated_qa_test_set_with_answers.csv", index=False)
+
     logger.info("Start evaluating...")
     output = self.evaluator.evaluate(
         self.predictor,
