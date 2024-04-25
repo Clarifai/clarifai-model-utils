@@ -13,7 +13,7 @@ from clarifai.client.model import Model
 from clarifai.client.workflow import Workflow
 from clarifai.utils.logging import get_logger
 
-from .constant import BGE_BASE_EMBED_MDOEL, WORKFLOW, JUDGE_LLMS
+from .constant import BGE_BASE_EMBED_MODEL, WORKFLOW, JUDGE_LLMS
 from .evaluator import ClarifaiModelHarnessEval, EvaluateResult, convert_dict_to_eval_result
 from .utils import get_model_answers, get_timestamp, make_dataset
 
@@ -335,7 +335,7 @@ class ClarifaiEvaluator():
 
       ## Initialize models.
       llm = Clarifai(model_url=JUDGE_LLMS.GPT4)
-      embeddings = ClarifaiEmbeddings(model_url=BGE_BASE_EMBED_MDOEL)
+      embeddings = ClarifaiEmbeddings(model_url=BGE_BASE_EMBED_MODEL)
       generator = TestsetGenerator.from_langchain(
         llm,
         llm,

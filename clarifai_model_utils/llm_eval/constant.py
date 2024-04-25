@@ -3,7 +3,7 @@ from dataclasses import dataclass
 WORKFLOW = "workflow"
 MODEL = "model"
 
-BGE_BASE_EMBED_MDOEL = "https://clarifai.com/clarifai/main/models/BAAI-bge-base-en-v15"
+BGE_BASE_EMBED_MODEL = "https://clarifai.com/clarifai/main/models/BAAI-bge-base-en-v15"
 
 @dataclass
 class JUDGE_LLMS:
