@@ -117,7 +117,6 @@ def get_model_answers(auth, user_id: str, app_id: str, model_id:str, df: pd.Data
     for job in futures:
       texts.update(job.result())
   
-  import pdb; pdb.set_trace()
 
   ## Overwrites the answer column.
   df['answer'] = df.index.map(texts)
