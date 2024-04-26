@@ -94,6 +94,35 @@ def get_text_dataset_inputs(auth, user_id: str, app_id: str, dataset_id: str, ma
   return True, texts
 
 
+def get_model_answers(auth, user_id: str, app_id: str, model_id:str, df: pd.DataFrame) -> pd.DataFrame:
+  """Calls model predict to add an "answer" column in df."""
+  stub: V2Stub = auth.get_stub()
+  user_app_id = resources_pb2.UserAppIDSet(user_id=user_id, app_id=app_id)
+
+  def _post_call(query: str, query_id: str):
+    resp = stub.PostModelOutputs(service_pb2.PostModelOutputsRequest(
+      user_app_id=user_app_id, 
+      model_id=model_id, inputs=[resources_pb2.Input(data=resources_pb2.Data(text=resources_pb2.Text(raw=query)))]),
+      metadata=auth.metadata)
+    output = ""
+    if resp.status.code == status_code_pb2.SUCCESS:
+      output = resp.outputs[0].data.text.raw
+    else:
+      print(resp)
+    return {query_id: output}
+
+  texts = {}
+  with ThreadPoolExecutor(max_workers=4) as executor:
+    futures = [executor.submit(_post_call, row['question'], i) for i, row in df.iterrows()]
+    for job in futures:
+      texts.update(job.result())
+  
+
+  ## Overwrites the answer column.
+  df['answer'] = df.index.map(texts)
+  return df
+
+
 def post_ext_metrics_eval(auth, model_id, version_id, eval_id, ext_metrics):
   metrics = struct_pb2.Struct()
   metrics.update(ext_metrics)
@@ -121,7 +150,7 @@ def post_ext_metrics_eval(auth, model_id, version_id, eval_id, ext_metrics):
   return post_eval
 
 
-def make_dataset(auth, app_id, dataset_id, split_word: str = "", max_input=None):
+def make_dataset(auth, app_id, dataset_id, split_word: str = "", max_input=None, generate_qa=False):
   """Pull dataset from Clarifai platform
 
   Args:
@@ -140,7 +169,11 @@ def make_dataset(auth, app_id, dataset_id, split_word: str = "", max_input=None)
       max_input=max_input,
   )
   _df = None
-  if flag:
+  if generate_qa:
+    ## Assume the stored text is plain text.
+    _df = pd.DataFrame({'text': texts})
+  elif flag:
+    ## Assume the stored text is in json string format.
     try:
       json_texts = [json.loads(each) for each in texts]
       _df = pd.DataFrame.from_dict(json_texts, orient="columns")

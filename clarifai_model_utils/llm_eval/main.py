@@ -6,15 +6,16 @@ from typing import Tuple, TypeVar, Union
 import pandas as pd
 from google.protobuf.json_format import MessageToDict
 from datasets import Dataset as HFDataset
+import ragas
 
 from clarifai.client.dataset import Dataset
 from clarifai.client.model import Model
 from clarifai.client.workflow import Workflow
 from clarifai.utils.logging import get_logger
 
-from .constant import WORKFLOW
+from .constant import BGE_BASE_EMBED_MODEL, WORKFLOW, JUDGE_LLMS
 from .evaluator import ClarifaiModelHarnessEval, EvaluateResult, convert_dict_to_eval_result
-from .utils import get_timestamp, make_dataset
+from .utils import get_model_answers, get_timestamp, make_dataset
 
 logger = get_logger(name=__file__)
 
@@ -44,6 +45,7 @@ class ClarifaiEvaluator():
                inference_parameters: dict = {},
                workflow_output_node: int = 1,
                is_rag_workflow: bool = None,
+               refresh_enabled: bool = True,
                **predictor_kwargs):
     if isinstance(predictor, str):
       _pred_clss = Workflow if type == WORKFLOW else Model
@@ -53,7 +55,9 @@ class ClarifaiEvaluator():
     self.evaluator = ClarifaiModelHarnessEval()
     self.inference_parameters = inference_parameters
     self._data = dict()
-    self.refresh()
+    self.refresh_enabled = refresh_enabled
+    if refresh_enabled:
+      self.refresh()
     self._is_rag_workflow = is_rag_workflow
     self._workflow_output_node = workflow_output_node
 
@@ -277,6 +281,7 @@ class ClarifaiEvaluator():
                    "num_fewshot": 0,
                },
                split_word: str = "### Response:",
+               generate_qa: int = None,
                **kwargs) -> EvaluateResult:
     """Evaluating llm model
 
@@ -291,6 +296,7 @@ class ClarifaiEvaluator():
         judge_llm_url (str, optional): Url of judge model, required when using llm_as_judge template. Defaults to "".
         extra_harness_config (dict, optional): Other custom harness config. Defaults to { "num_fewshot": 0, }.
         split_word (str, optional): Split word for non-jsonify dataset. Defaults to "### Response:".
+        generate_qa (int, optional): How many questions and answers to generate from the provided dataset. The dataset is expected to be contexts.
 
     Returns:
         EvaluateResult
@@ -305,7 +311,7 @@ class ClarifaiEvaluator():
           dataset_id=dataset.id,
           app_id=dataset.app_id,
           split_word=split_word,
-          max_input=None)
+          generate_qa=generate_qa)
     elif isinstance(dataset, pd.DataFrame):  # local data
       df = dataset
       dataset_id = kwargs.pop("dataset_id", "")
@@ -318,7 +324,48 @@ class ClarifaiEvaluator():
     elif isinstance(dataset, HFDataset):
       df = dataset.to_pandas(batched=True)
     else:
-      raise Exception
+      raise Exception("Only Dataset, pd.DataFrame, and HFDataset types are handled.")
+    
+    if generate_qa:
+      from ragas.testset.generator import TestsetGenerator
+      from ragas.testset.evolutions import simple, reasoning, multi_context
+      from langchain_community.llms import Clarifai
+      from langchain_community.embeddings import ClarifaiEmbeddings
+      from langchain_community.document_loaders import DataFrameLoader
+
+      ## Initialize models.
+      llm = Clarifai(model_url=JUDGE_LLMS.GPT4)
+      embeddings = ClarifaiEmbeddings(model_url=BGE_BASE_EMBED_MODEL)
+      generator = TestsetGenerator.from_langchain(
+        llm,
+        llm,
+        embeddings
+      )
+
+      # Convert dataframe to langchain docs.
+      loader = DataFrameLoader(df)
+      documents = loader.load()
+
+      generated_test_set = generator.generate_with_langchain_docs(
+        documents, 
+        test_size=generate_qa, 
+        distributions={
+            simple: 0.5, 
+            reasoning: 0.25, 
+            multi_context: 0.25})
+
+      df = generated_test_set.to_pandas()
+      df.to_csv("generated_qa_test_set.csv", index=False)
+
+      # Get answers from predictor
+      if self.is_model:
+        model_id = self.predictor.id
+        model_user_id = self.predictor.user_id
+        model_app_id = self.predictor.app_id
+        auth_helper = self.predictor.auth_helper
+
+      df = get_model_answers(auth_helper, model_user_id, model_app_id, model_id, df)
+      df.to_csv("generated_qa_test_set_with_answers.csv", index=False)
 
     logger.info("Start evaluating...")
     output = self.evaluator.evaluate(
@@ -345,6 +392,7 @@ class ClarifaiEvaluator():
     if upload and isinstance(self.predictor, Model):
       self.upload_result(output)
 
-    self.refresh()
+    if self.refresh_enabled:
+      self.refresh()
 
     return output
