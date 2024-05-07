@@ -31,7 +31,16 @@ def get_tokens(s):
   return normalize_answer(s).split()
 
 
-def f1(predictions, references):  # <--------------------- Assign this to yaml
+def f1(predictions, references):  # <--------------------- Assign this to config
+  """Compute f1 metric
+
+  Args:
+      predictions (List[str]): list of predictions with length is batch size
+      references (List[str]): list of ground truths with length is batch size
+
+  Returns:
+      float: score
+  """
   gold_toks = get_tokens(references[0])
   pred_toks = get_tokens(predictions[0])
   common = collections.Counter(gold_toks) & collections.Counter(pred_toks)

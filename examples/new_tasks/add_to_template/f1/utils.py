@@ -30,6 +30,15 @@ def get_tokens(s):
 
 
 def f1(predictions, references):
+  """Compute f1 metric
+
+  Args:
+      predictions (List[str]): list of predictions with length is batch size
+      references (List[str]): list of ground truths with length is batch size
+
+  Returns:
+      float: score
+  """
   gold_toks = get_tokens(references[0])
   pred_toks = get_tokens(predictions[0])
   common = collections.Counter(gold_toks) & collections.Counter(pred_toks)

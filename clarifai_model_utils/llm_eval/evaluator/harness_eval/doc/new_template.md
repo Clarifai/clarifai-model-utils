@@ -13,7 +13,7 @@ Suppose you want to use single metric says `f1` and you have your own implementa
   ```yaml
   group:
   - f1
-  task: f1
+  task: f1 # Name of the task
   dataset_path: csv
   dataset_name:
   output_type: generate_until
@@ -62,6 +62,15 @@ Suppose you want to use single metric says `f1` and you have your own implementa
     return normalize_answer(s).split()
 
   def f1(predictions, references): # <--------------------- Assign this to yaml
+    """Compute f1 metric
+
+    Args:
+        predictions (List[str]): list of predictions with length is batch size
+        references (List[str]): list of ground truths with length is batch size
+
+    Returns:
+        float: score
+    """
     gold_toks = get_tokens(references[0])
     pred_toks = get_tokens(predictions[0])
     common = collections.Counter(gold_toks) & collections.Counter(pred_toks)
@@ -96,7 +105,7 @@ Suppose you want to use single metric says `f1` and you have your own implementa
 
 # 2. Use TaskConfig directly
 
-harness-eval loads yaml config into [TaskDict](https://github.com/EleutherAI/lm-evaluation-harness/blob/main/lm_eval/api/task.py#L55) enventually. So you can configure the template directly on this class. Take the example in (1.) we can turn it to:
+harness-eval loads yaml config into [TaskConfig](https://github.com/EleutherAI/lm-evaluation-harness/blob/main/lm_eval/api/task.py#L55) enventually. So you can configure the template directly on this class. Take the example in (1.) we can turn it to:
 
 ```python
 from lm_eval.api.task import TaskConfig
@@ -167,7 +176,8 @@ config = TaskConfig(
 Now using it
 ```python
 out = evaluator.evaluate(
-    template=config.to_dict(), # convert TaskConfig to dict
+    template=config, # convert TaskConfig to dict
+    # template=config.to_dict(keep_callable=True) , # convert TaskConfig to dict
     upload=False,
     dataset=ds,
 )

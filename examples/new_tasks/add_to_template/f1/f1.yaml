@@ -16,9 +16,3 @@ metric_list:
 
 repeats: 1
 num_fewshot: 0
-#filter_list:
-#  - name: "get-answer"
-#    filter:
-#      - function: "regex"
-#        regex_pattern: r"\beat"
-#      - function: "take_first"
