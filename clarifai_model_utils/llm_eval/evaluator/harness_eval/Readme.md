@@ -29,6 +29,8 @@ where:
 
 Since the initial goal is to evaluate model and dataset uploaded in the platform. The harness-eval consumes hf dataset to run, so we first download Clarifai dataset to temporary file and assign it to harness-eval the config (Task) see [here](https://github.com/Clarifai/clarifai-model-utils/blob/main/clarifai_model_utils/llm_eval/evaluator/harness_eval/evaluate.py)
 
+For now, it also supports huggingface dataset. See this [#6 PR](https://github.com/Clarifai/clarifai-model-utils/pull/6)
+
 ### 2. [llm.py](llm.py)
 
 This file contains the implementation of the `Clarifai SDK model/workflow` derived from the harness base model for use in evaluation. It includes two ready components:

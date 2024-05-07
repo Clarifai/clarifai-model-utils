@@ -227,7 +227,10 @@ class ClarifaiModelHarnessEval:
     _file = tempfile.NamedTemporaryFile(prefix="lm_eval_", suffix=".csv")
     _file.close()
     try:
-      data_frame.to_csv(_file.name, index=False)
+
+      if isinstance(data_frame, pd.DataFrame):
+        data_frame.to_csv(_file.name, index=False)
+
       _template = deepcopy(template)
 
       config = self.prepare_config(_template, _file.name)
