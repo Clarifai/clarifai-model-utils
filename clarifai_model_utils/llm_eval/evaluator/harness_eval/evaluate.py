@@ -183,7 +183,6 @@ class ClarifaiModelHarnessEval:
           if config.get('dataset_kwargs').get("data_files").get("validation", None):
             assert data_file, "`data_file` must be provided when using `dataset_path=csv`"
       config['dataset_kwargs'] = dict(data_files=dict(validation=data_file))
-    print(config)
     return config
 
   def evaluate(
@@ -191,7 +190,7 @@ class ClarifaiModelHarnessEval:
       predictor: Union[Model, Workflow],
       data_frame: pd.DataFrame,
       template: str,
-      weights: dict,
+      weights: dict = {},
       regex_code: str = "",
       input_prompt: str = "",
       judge_llm_url: str = "",
@@ -210,7 +209,7 @@ class ClarifaiModelHarnessEval:
         predictor (Union[Model, Workflow]): Model/Workflow or Url
         data_frame (pd.DataFrame): a dataframe has column names [question, answer]
         template (str): template name
-        weights (dict): weights of sub metrics
+        weights (dict): weights of sub metrics. By default, an empty dict implies that each sub metric carries equal weight.
         regex_code (str): regex code that makes `filters`
         input_prompt (str): input prompt tempplate that makes `doc_to_text`
         judge_llm_url (str): Clarifai model url for `process_results`

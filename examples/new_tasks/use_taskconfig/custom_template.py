@@ -1,6 +1,7 @@
 import collections
 import re
 import string
+from typing import List
 
 from lm_eval.api.task import TaskConfig
 
@@ -31,7 +32,8 @@ def get_tokens(s):
   return normalize_answer(s).split()
 
 
-def f1(predictions, references):  # <--------------------- Assign this to config
+def f1(predictions: List[str],
+       references: List[str]):  # <--------------------- Assign this to config
   """Compute f1 metric
 
   Args:

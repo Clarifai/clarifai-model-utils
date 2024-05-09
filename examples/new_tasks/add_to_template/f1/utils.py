@@ -1,6 +1,7 @@
 import collections
 import re
 import string
+from typing import List
 
 
 def normalize_answer(s):
@@ -29,7 +30,7 @@ def get_tokens(s):
   return normalize_answer(s).split()
 
 
-def f1(predictions, references):
+def f1(predictions: List[str], references: List[str]):
   """Compute f1 metric
 
   Args:

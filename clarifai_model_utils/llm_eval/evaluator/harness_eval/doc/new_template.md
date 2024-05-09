@@ -1,4 +1,4 @@
-There are 2 ways to add new task:
+To create a new task, you can either provide your configuration in TaskConfig or include it in a YAML file within a task folder located in the template directory. See the details below:
 
 # 1. Create task folder:
 
@@ -12,8 +12,8 @@ Suppose you want to use single metric says `f1` and you have your own implementa
   * f1.yaml: contains TaskConfig
   ```yaml
   group:
-  - f1
-  task: f1 # Name of the task
+  - calculate_f1
+  task: calculate_f1 # Name of the task
   dataset_path: csv
   dataset_name:
   output_type: generate_until
@@ -91,7 +91,7 @@ Suppose you want to use single metric says `f1` and you have your own implementa
 
   ```python
   out = evaluator.evaluate(
-    template="f1",
+    template="calculate_f1",
     upload=False,
     dataset=ds,
   )
@@ -154,7 +154,7 @@ def f1(predictions, references): # <--------------------- Assign this to yaml
   return f1 * 100
 
 config = TaskConfig(
-  task="f1",
+  task="calculate_f1",
   dataset_path="csv",
   dataset_name="",
   output_type="generate_until",
