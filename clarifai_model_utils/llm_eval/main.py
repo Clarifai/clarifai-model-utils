@@ -318,11 +318,11 @@ class ClarifaiEvaluator():
           generate_qa=generate_qa)
     elif isinstance(dataset, pd.DataFrame):  # local data
       df = dataset
-      assert dataset_id or app_id, ValueError(
-          f"`dataset_id` or `app_id` is empty when using local dataset. Please pass them to kwargs"
-      )
+      #assert dataset_id or app_id, ValueError(
+      #    f"`dataset_id` or `app_id` is empty when using local dataset. Please pass them to kwargs"
+      #)
     elif isinstance(dataset, HFDataset):
-      df = dataset.to_pandas(batched=True)
+      df = dataset.to_pandas(batched=False)
     elif template in HARNESS_EVAL_TASK_MANAGER.all_tasks:
       df = None
       dataset_id = template

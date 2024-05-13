@@ -14,13 +14,13 @@ from lm_eval.tasks import TaskManager, get_task_dict
 from clarifai.client.model import Model
 from clarifai.client.workflow import Workflow
 from clarifai.utils.logging import get_logger
-
 try:
   from .llm import ClarifaiLM  # noqa # pylint: disable=unused-import
 except:
   pass
 
 from .output import DatasetInfo, EvaluateResult, LmJudgeInfo, PromptTemplate, make_result_dataframe
+from .python_templates import PYTHON_TEMPLATES
 
 logger = get_logger(name=__file__)
 
@@ -154,12 +154,13 @@ class ClarifaiModelHarnessEval:
 
     return results
 
-  def prepare_config(self, template, data_file: str = None):
+  def prepare_config(self, template, data_file: str = None, **kwargs):
     """Verify if 'template' is in defined templates or dict
 
     Args:
         template (Union[str, dict])
         data_file (str, optional): path to dataframe if using dataset_path in config. Defaults to None.
+        kwargs: keyword args to load template
 
     Returns:
         dict
@@ -167,6 +168,9 @@ class ClarifaiModelHarnessEval:
     config = {}
     if template in self.templates:
       config = deepcopy(self.template_configs[template]["config"])
+    elif template in PYTHON_TEMPLATES:
+      config = PYTHON_TEMPLATES[template](**kwargs)
+      config = config.to_harness_dict_config()
     elif type(template) == TaskConfig:
       config = template.to_dict(keep_callable=True)
     elif isinstance(template, dict):
@@ -185,25 +189,24 @@ class ClarifaiModelHarnessEval:
       config['dataset_kwargs'] = dict(data_files=dict(validation=data_file))
     return config
 
-  def evaluate(
-      self,
-      predictor: Union[Model, Workflow],
-      data_frame: pd.DataFrame,
-      template: str,
-      weights: dict = {},
-      regex_code: str = "",
-      input_prompt: str = "",
-      judge_llm_url: str = "",
-      custom_config: dict = {
-          "num_fewshot": 0,
-      },
-      inference_parameters: dict = {},
-      predictor_kwargs: dict = {},
-      eval_id: str = None,
-      dataset_info: dict = None,
-      workflow_output_node: int = 1,
-      is_rag_workflow: bool = None,
-  ) -> EvaluateResult:
+  def evaluate(self,
+               predictor: Union[Model, Workflow],
+               data_frame: pd.DataFrame,
+               template: str,
+               weights: dict = {},
+               regex_code: str = "",
+               input_prompt: str = "",
+               judge_llm_url: str = "",
+               custom_config: dict = {
+                   "num_fewshot": 0,
+               },
+               inference_parameters: dict = {},
+               predictor_kwargs: dict = {},
+               eval_id: str = None,
+               dataset_info: dict = None,
+               workflow_output_node: int = 1,
+               is_rag_workflow: bool = None,
+               **kwargs) -> EvaluateResult:
     """Evaluate
     Args:
         predictor (Union[Model, Workflow]): Model/Workflow or Url
@@ -232,7 +235,10 @@ class ClarifaiModelHarnessEval:
 
       _template = deepcopy(template)
 
-      config = self.prepare_config(_template, _file.name)
+      config = self.prepare_config(
+          _template,
+          _file.name,
+      )
       config.update(custom_config)
       template_name = config.get("task", None) or template
       # checking weights config
@@ -248,7 +254,7 @@ class ClarifaiModelHarnessEval:
         config.update(filters)
 
       judge_model = None
-      if template_name in ['llm_as_judge', 'rag']:
+      if template_name in ['llm_as_judge', 'rag', 'ragas']:
         assert judge_llm_url, ValueError(
             f"Please provide judge_llm_url for template llm_as_judge or rag")
         judge_model = LmJudgeInfo(
@@ -256,7 +262,19 @@ class ClarifaiModelHarnessEval:
         logger.debug(judge_model)
         if 'rag' in template_name or is_rag_workflow:
           assert isinstance(predictor, Workflow), "Require Workflow predictor to evaluate RAG"
-          config.update(dict(process_results=judge_model.judge.process_rag_result))
+          if template_name == 'rag':
+            config.update(dict(process_results=judge_model.judge.process_rag_result))
+          elif template_name == 'ragas':
+            _ragas_config = PYTHON_TEMPLATES[template_name](
+                langchain_llm_kwargs=dict(
+                    model_url=judge_llm_url,
+                    pat=predictor.auth_helper._pat,
+                    token=predictor.auth_helper._token),
+                has_ground_truth="ground_truth" in data_frame.columns)
+            config.update(
+                dict(
+                    process_results=_ragas_config.process_results_func,
+                    metric_list=_ragas_config.config.metric_list))
           is_rag_workflow = True
         elif template_name == 'llm_as_judge':
           config.update(dict(process_results=judge_model.judge_process_result_func))
