@@ -8,7 +8,8 @@ from typing import Union
 import lm_eval
 import pandas as pd
 from lm_eval import evaluator, utils
-from lm_eval.tasks import get_task_dict
+from lm_eval.api.task import TaskConfig
+from lm_eval.tasks import TaskManager, get_task_dict
 
 from clarifai.client.model import Model
 from clarifai.client.workflow import Workflow
@@ -22,6 +23,8 @@ except:
 from .output import DatasetInfo, EvaluateResult, LmJudgeInfo, PromptTemplate, make_result_dataframe
 
 logger = get_logger(name=__file__)
+
+HARNESS_EVAL_TASK_MANAGER = TaskManager()
 
 
 def construct_regex_filter(regex_code: str):
@@ -136,7 +139,8 @@ class ClarifaiModelHarnessEval:
     )
     task_name = next(iter(task_dict.keys()))
     summary = {}
-    metrics = self.load_metrics_list_from_config(task_dict[task_name].config.to_dict())
+    metrics = self.load_metrics_list_from_config(
+        task_dict[task_name].config.to_dict(keep_callable=True))
     for k, v in results.get("results")[task_name].items():
       _k = k.split(",")[0]
       if _k in metrics:
@@ -160,20 +164,25 @@ class ClarifaiModelHarnessEval:
     Returns:
         dict
     """
+    config = {}
     if template in self.templates:
       config = deepcopy(self.template_configs[template]["config"])
+    elif type(template) == TaskConfig:
+      config = template.to_dict(keep_callable=True)
     elif isinstance(template, dict):
       config = template
     elif isinstance(template, str) and os.path.exists(template):
       config = self.load_config(template)['config']
-
+    elif isinstance(template, str) and template in HARNESS_EVAL_TASK_MANAGER.all_tasks:
+      config = get_task_dict(task_name_list=template)[template].config.to_dict()
+    else:
+      raise ValueError("Supported template type as one of [str, dict, Task]")
     if config.get("dataset_path", "") == "csv":
       if config.get('dataset_kwargs', None):
         if config.get('dataset_kwargs').get("data_files", None):
           if config.get('dataset_kwargs').get("data_files").get("validation", None):
             assert data_file, "`data_file` must be provided when using `dataset_path=csv`"
       config['dataset_kwargs'] = dict(data_files=dict(validation=data_file))
-
     return config
 
   def evaluate(
@@ -181,7 +190,7 @@ class ClarifaiModelHarnessEval:
       predictor: Union[Model, Workflow],
       data_frame: pd.DataFrame,
       template: str,
-      weights: dict,
+      weights: dict = {},
       regex_code: str = "",
       input_prompt: str = "",
       judge_llm_url: str = "",
@@ -200,7 +209,7 @@ class ClarifaiModelHarnessEval:
         predictor (Union[Model, Workflow]): Model/Workflow or Url
         data_frame (pd.DataFrame): a dataframe has column names [question, answer]
         template (str): template name
-        weights (dict): weights of sub metrics
+        weights (dict): weights of sub metrics. By default, an empty dict implies that each sub metric carries equal weight.
         regex_code (str): regex code that makes `filters`
         input_prompt (str): input prompt tempplate that makes `doc_to_text`
         judge_llm_url (str): Clarifai model url for `process_results`
@@ -217,17 +226,21 @@ class ClarifaiModelHarnessEval:
     _file = tempfile.NamedTemporaryFile(prefix="lm_eval_", suffix=".csv")
     _file.close()
     try:
-      data_frame.to_csv(_file.name, index=False)
+
+      if isinstance(data_frame, pd.DataFrame):
+        data_frame.to_csv(_file.name, index=False)
+
       _template = deepcopy(template)
 
       config = self.prepare_config(_template, _file.name)
       config.update(custom_config)
       template_name = config.get("task", None) or template
       # checking weights config
-      _loaded_metrics = self.load_metrics_list_from_config(config)
-      assert all([each in _loaded_metrics for each in weights]), Exception(
-          f"Defined metrics {weights} in `weights` are not same as template metrics {_loaded_metrics}"
-      )
+      if weights:
+        _loaded_metrics = self.load_metrics_list_from_config(config)
+        assert all([each in _loaded_metrics for each in weights]), Exception(
+            f"Defined metrics {weights} in `weights` are not same as template metrics {_loaded_metrics}"
+        )
 
       logger.debug(config)
       if regex_code:
@@ -256,7 +269,7 @@ class ClarifaiModelHarnessEval:
         prompter = PromptTemplate(harness_prompt=input_prompt)
         config.update(dict(doc_to_text=input_prompt))
 
-      task_dict = get_task_dict(config)
+      task_dict = get_task_dict([config], task_manager=HARNESS_EVAL_TASK_MANAGER)
       results = self.call_harness_eval(
           predictor=predictor,
           predictor_kwargs=predictor_kwargs,

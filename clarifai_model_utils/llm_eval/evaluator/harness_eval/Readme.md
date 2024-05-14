@@ -11,6 +11,26 @@ Other features include:
 - Fetching documentation per template
 - Accessing configuration per template
 
+#### 1.1. Wrapper
+The wrapper is located in `ClarifaiModelHarnessEval.call_harness_eval` method.
+
+```python
+results = evaluator.evaluate(
+        lm=lm,
+        task_dict=task_dict,
+        ...
+    )
+```
+where:
+* lm: llm model derived from [lm_eval.api.model.LM](https://github.com/EleutherAI/lm-evaluation-harness/blob/main/lm_eval/api/model.py)
+* task_dict: Dict of task name and [lm_eval.api.task.Task](https://github.com/EleutherAI/lm-evaluation-harness/blob/main/lm_eval/api/task.py)
+
+#### 1.2. Dataset
+
+Since the initial goal is to evaluate model and dataset uploaded in the platform. The harness-eval consumes hf dataset to run, so we first download Clarifai dataset to temporary file and assign it to harness-eval the config (Task) see [here](https://github.com/Clarifai/clarifai-model-utils/blob/main/clarifai_model_utils/llm_eval/evaluator/harness_eval/evaluate.py)
+
+For now, it also supports huggingface dataset. See this [#6 PR](https://github.com/Clarifai/clarifai-model-utils/pull/6)
+
 ### 2. [llm.py](llm.py)
 
 This file contains the implementation of the `Clarifai SDK model/workflow` derived from the harness base model for use in evaluation. It includes two ready components:

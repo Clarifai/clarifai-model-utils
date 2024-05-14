@@ -4,17 +4,17 @@ from collections import defaultdict
 from typing import Tuple, TypeVar, Union
 
 import pandas as pd
-from google.protobuf.json_format import MessageToDict
 from datasets import Dataset as HFDataset
-import ragas
+from google.protobuf.json_format import MessageToDict
 
 from clarifai.client.dataset import Dataset
 from clarifai.client.model import Model
 from clarifai.client.workflow import Workflow
 from clarifai.utils.logging import get_logger
 
-from .constant import BGE_BASE_EMBED_MODEL, WORKFLOW, JUDGE_LLMS
+from .constant import BGE_BASE_EMBED_MODEL, JUDGE_LLMS, WORKFLOW
 from .evaluator import ClarifaiModelHarnessEval, EvaluateResult, convert_dict_to_eval_result
+from .evaluator.harness_eval.evaluate import HARNESS_EVAL_TASK_MANAGER
 from .utils import get_model_answers, get_timestamp, make_dataset
 
 logger = get_logger(name=__file__)
@@ -301,6 +301,10 @@ class ClarifaiEvaluator():
     Returns:
         EvaluateResult
     """
+    dataset_id = kwargs.pop("dataset_id", "")
+    app_id = kwargs.pop("app_id", "")
+    user_id = kwargs.pop("user_id", "")
+    version_id = kwargs.pop("version_id", "")
     if isinstance(dataset, Dataset):
       dataset_id = dataset.id
       app_id = dataset.app_id
@@ -314,45 +318,41 @@ class ClarifaiEvaluator():
           generate_qa=generate_qa)
     elif isinstance(dataset, pd.DataFrame):  # local data
       df = dataset
-      dataset_id = kwargs.pop("dataset_id", "")
-      app_id = kwargs.pop("app_id", "")
-      user_id = kwargs.pop("user_id", "")
-      version_id = kwargs.pop("version_id", "")
       assert dataset_id or app_id, ValueError(
           f"`dataset_id` or `app_id` is empty when using local dataset. Please pass them to kwargs"
       )
     elif isinstance(dataset, HFDataset):
       df = dataset.to_pandas(batched=True)
+    elif template in HARNESS_EVAL_TASK_MANAGER.all_tasks:
+      df = None
+      dataset_id = template
     else:
       raise Exception("Only Dataset, pd.DataFrame, and HFDataset types are handled.")
-    
+
     if generate_qa:
-      from ragas.testset.generator import TestsetGenerator
-      from ragas.testset.evolutions import simple, reasoning, multi_context
-      from langchain_community.llms import Clarifai
-      from langchain_community.embeddings import ClarifaiEmbeddings
       from langchain_community.document_loaders import DataFrameLoader
+      from langchain_community.embeddings import ClarifaiEmbeddings
+      from langchain_community.llms import Clarifai
+      from ragas.testset.evolutions import multi_context, reasoning, simple
+      from ragas.testset.generator import TestsetGenerator
 
       ## Initialize models.
       llm = Clarifai(model_url=JUDGE_LLMS.GPT4)
       embeddings = ClarifaiEmbeddings(model_url=BGE_BASE_EMBED_MODEL)
-      generator = TestsetGenerator.from_langchain(
-        llm,
-        llm,
-        embeddings
-      )
+      generator = TestsetGenerator.from_langchain(llm, llm, embeddings)
 
       # Convert dataframe to langchain docs.
       loader = DataFrameLoader(df)
       documents = loader.load()
 
       generated_test_set = generator.generate_with_langchain_docs(
-        documents, 
-        test_size=generate_qa, 
-        distributions={
-            simple: 0.5, 
-            reasoning: 0.25, 
-            multi_context: 0.25})
+          documents,
+          test_size=generate_qa,
+          distributions={
+              simple: 0.5,
+              reasoning: 0.25,
+              multi_context: 0.25
+          })
 
       df = generated_test_set.to_pandas()
       df.to_csv("generated_qa_test_set.csv", index=False)
