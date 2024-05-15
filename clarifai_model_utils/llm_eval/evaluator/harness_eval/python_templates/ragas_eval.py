@@ -1,7 +1,7 @@
 import logging
 import math
 from dataclasses import asdict, dataclass, field
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from datasets import Dataset as HFDataset
 from langchain_community.embeddings import ClarifaiEmbeddings
@@ -69,15 +69,22 @@ class RAGAS(_BasePythonTemplate):
 
     self.config.process_results = self.process_results_func
 
-  def process_results_func(self, doc: dict, results: List[List]):
+  def process_results_func(self, doc: dict, results: List[List]) -> Dict[str, float]:
     """Compute RAGAS metrics per row of dataset
 
     Args:
-        doc (dict): row data of dataset
+        doc (dict): A dictionary representing a row of dataset data. It must include `question` and optionally `ground_truth` if `has_ground_truth` is set.
         results (List[List]): result list has length equal to batch size (1) contains [context, answer] of RAG workflow
 
+    Example:
+    >>> doc = dict(question="What is Clarifai?")
+    >>> rag_results = [["Context: Long document about Clarifai...", "Clarifai is Clarifai is the leading Full Stack AI, LLM, and computer vision production platform..."]]
+    >>> scores = ragas_eval_instance.process_results_func(doc, rag_results)
+    >>> print(scores)
+    >>> {'faithfulness': 0.999, 'answer_relevancy': 0.99}
+
     Returns:
-        _type_: _description_
+        Dict[str, float]: ragas scores
     """
     assert isinstance(results,
                       list) and len(results[0]) > 1, "results must be a list of [context, answer]"
@@ -95,7 +102,7 @@ class RAGAS(_BasePythonTemplate):
     # Take value of question
     question = doc["question"]
     try:
-      ground_truth = doc["ground_truths"]
+      ground_truth = doc["ground_truth"]
     except:
       ground_truth = ""
     data = {
