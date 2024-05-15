@@ -35,7 +35,6 @@ def split_sample_general_template(text, split_word) -> tuple:
 
 def get_text_dataset_inputs(auth, user_id: str, app_id: str, dataset_id: str, max_input=100):
   stub: V2Stub = auth.get_stub()
-  user_app_id = resources_pb2.UserAppIDSet(user_id=user_id, app_id=app_id)
 
   # get number of samples of dataset
   app = App(app_id=app_id, user_id=user_id)
