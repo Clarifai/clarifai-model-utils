@@ -22,7 +22,7 @@ df = pd.DataFrame(df)
 out = evaluator.evaluate(
     template="ragas",
     upload=False,
-    judge_llm_url=JUDGE_LLMS.GPT3_5_TURBO,  # use GPT3.5 in RAGAS
+    judge_llm_url=JUDGE_LLMS.DBRX_INSTRUCT,  # use databricks/DBRX-Instruct in RAGAS
     dataset=df,
 )
 
